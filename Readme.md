@@ -1,10 +1,10 @@
-#**TP1: Containers**
+**#TP1: Containers**
 
 Dans ce TP on va aaborder plusieurs points autour de la conteneurisation.
 
-##**Part I: Docker basics** 
+**##Part I: Docker basics** 
 
-###**1. Install**
+**###1. Install**
 
 Let's go taper des p'tites commandes :
 
@@ -58,11 +58,11 @@ reconnexion
 
 Bon c'est bien beau on a docker mais maintenant go l'utiliser :)
 
-###**2. Vérifier l'install**
+**###2. Vérifier l'install**
 
 Bon j'vais pas détailler ici, on à les commandes de base : docker ps, docker run... Bah on les tape et on voit ce que ça fait
 
-###**3. Lancement de conteneurs**
+**###3. Lancement de conteneurs**
 
 A. Utiliser la commande docker run
 
@@ -133,12 +133,12 @@ preuve :
 
 Hello
 
-##**Part II: Images**
+**##Part II: Images**
 
 
 
-##**Part III: docker-compose**
+**##Part III: docker-compose**
 
-##**Part IV: Docker security**
+**##Part IV: Docker security**
 
  
