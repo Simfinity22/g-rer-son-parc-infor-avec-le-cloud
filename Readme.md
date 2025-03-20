@@ -1,10 +1,10 @@
-**#TP1: Containers**
+# **TP1: Containers**
 
 Dans ce TP on va aaborder plusieurs points autour de la conteneurisation.
 
-**##Part I: Docker basics** 
+## **Part I: Docker basics** 
 
-**###1. Install**
+### **1. Install**
 
 Let's go taper des p'tites commandes :
 
@@ -58,11 +58,11 @@ reconnexion
 
 Bon c'est bien beau on a docker mais maintenant go l'utiliser :)
 
-**###2. Vérifier l'install**
+### **2. Vérifier l'install**
 
 Bon j'vais pas détailler ici, on à les commandes de base : docker ps, docker run... Bah on les tape et on voit ce que ça fait
 
-**###3. Lancement de conteneurs**
+### **3. Lancement de conteneurs**
 
 A. Utiliser la commande docker run
 
@@ -133,12 +133,157 @@ preuve :
 
 Hello
 
-**##Part II: Images**
+## **Part II: Images**
+
+### **1. Construire votre propre image**
+
+On écrit le Dockerfile, en gros c'est un fichier texte qui permet de créer une image et qui définit tout ce qui est nécessaire pour exécuter une application dans un conteneur.
+
+  - cat Dockerfile
+
+``` 
+FROM ubuntu:latest
+
+RUN apt update -y 
+RUN apt install -y apache2
+
+RUN echo "ServerName localhost" >> /etc/apache2/apache2.conf
+
+COPY apache2.conf /etc/apache2/apache2.conf
+
+COPY index.html /var/www/html/index.html
 
 
+RUN mkdir -p /var/log/apache2 
+RUN ln -sf /dev/stdout /var/log/apache2/access.log 
+RUN ln -sf /dev/stderr /var/log/apache2/error.log
 
-**##Part III: docker-compose**
+EXPOSE 80
 
-**##Part IV: Docker security**
+CMD ["apachectl", "-D", "FOREGROUND"]
 
- 
+```
+  - docker build -t my_own_app .        <!--Ici on construit l'image à partir du dossier dans lequel on se trouve (.) et on lui donne un nom (-t) -->
+  - docker run -p 8889:80 my_own_app  <!-- Ici on lance le conteneur docker que l'on vient de build -->
+
+  - curl http://localhost:8889
+
+
+```
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bienvenue sur mon serveur Apache</title>
+</head>
+<body>
+    <h1>Hello world !</h1>
+</body>
+</html>
+```
+
+## **Part III: docker-compose**
+
+**2. WikiJS**
+
+  - curl http://20.251.169.36:80
+
+```
+<!DOCTYPE html>
+<html>
+<head>
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="user-scalable=yes, width=device-width, initial-scale=1, maximum-scale=5">
+    <meta name="theme-color" content="#1976d2">
+    <meta name="msapplication-TileColor" content="#1976d2">
+    <meta name="msapplication-TileImage" content="/_assets/favicons/mstile-150x150.png">
+    
+    <title>Wiki.js Setup</title>
+
+    <!-- Favicons -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/_assets/favicons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/_assets/favicons/android-chrome-192x192.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/_assets/favicons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/_assets/favicons/favicon-16x16.png">
+    <link rel="mask-icon" href="/_assets/favicons/safari-pinned-tab.svg" color="#1976d2">
+    <link rel="manifest" href="/_assets/manifest.json">
+
+    <!-- Site Configuration -->
+    <script>
+        var siteConfig = { "title": "Wiki.js" };
+    </script>
+
+    <!-- Stylesheets -->
+    <link type="text/css" rel="stylesheet" href="/_assets/css/setup.22871ffac1b643eed4d9.css">
+
+    <!-- Scripts -->
+    <script type="text/javascript" src="/_assets/js/runtime.js?1738531300"></script>
+    <script type="text/javascript" src="/_assets/js/setup.js?1738531300"></script>
+</head>
+<body>
+    <div id="root">
+        <setup wiki-version="2.5.306"></setup>
+    </div>
+</body>
+</html>
+```
+
+**3. Make your own image**
+
+  - cat Dockerfile 
+
+```
+FROM python:3
+
+RUN mkdir /opt/app/
+
+WORKDIR /opt/app
+
+COPY toto/ .
+
+RUN pip install -r requirements.txt
+
+CMD [ "/usr/local/bin/python3.13", "app.py" ]
+```
+
+  - cat docker-compose.yaml 
+
+```
+services:
+  web:
+    image: own-app:latest
+    build: .
+    ports:
+      - "10000:8888"
+  db:
+    image: "redis:alpine"
+```
+
+
+## **Part IV: Docker security**
+
+Prouvez que vous pouvez devenir root
+
+  - docker run -v /:/mnt:ro -it alpine cat /etc/shadow 
+
+```
+root:*::0:::::
+bin:!::0:::::
+daemon:!::0:::::
+lp:!::0:::::
+sync:!::0:::::
+shutdown:!::0:::::
+halt:!::0:::::
+mail:!::0:::::
+news:!::0:::::
+uucp:!::0:::::
+cron:!::0:::::
+ftp:!::0:::::
+sshd:!::0:::::
+games:!::0:::::
+ntp:!::0:::::
+guest:!::0:::::
+nobody:!::0:::::
+```
