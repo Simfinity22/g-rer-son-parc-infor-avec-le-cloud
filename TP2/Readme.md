@@ -168,4 +168,344 @@ Docker version 28.0.2, build 0442a73
 
 **2.Copy paste**
 
+Pour cette partie on a juste à reprendre le code tout prêt dans l'ennocé et on constate que le déploiement a lieu.
 
+
+```
+[
+  {
+    "id": "/subscriptions/<ID_SUBSCRIPTION>/resourceGroups/EFREI",
+    "location": "norwayeast",
+    "managedBy": null,
+    "name": "EFREI",
+    "properties": {
+      "provisioningState": "Succeeded"
+    },
+    "tags": null,
+    "type": "Microsoft.Resources/resourceGroups"
+  },
+  {
+    "id": "/subscriptions/<ID_SUBSCRIPTION>/resourceGroups/NetworkWatcherRG",
+    "location": "norwayeast",
+    "managedBy": null,
+    "name": "NetworkWatcherRG",
+    "properties": {
+      "provisioningState": "Succeeded"
+    },
+    "tags": null,
+    "type": "Microsoft.Resources/resourceGroups"
+  },
+  {
+    "id": "/subscriptions/<ID_SUBSCRIPTION>/resourceGroups/tp2magueule-resources",
+    "location": "westeurope",
+    "managedBy": null,
+    "name": "tp2magueule-resources",
+    "properties": {
+      "provisioningState": "Succeeded"
+    },
+    "tags": {},
+    "type": "Microsoft.Resources/resourceGroups"
+  }
+]
+```
+
+**3. Do it yourself**
+
+Dans cette partie il faut créer deux VMs avec un fichier de conf .tf : 
+
+Le fichier de conf main.tf :
+
+```
+provider "azurerm" {
+  features {}
+  subscription_id = "<SUBSCRIPTION_ID>"
+}
+resource "azurerm_resource_group" "main" {
+  name     = "${var.prefix}-resources"
+  location = var.location
+}
+resource "azurerm_virtual_network" "main" {
+  name                = "${var.prefix}-network"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+}
+resource "azurerm_subnet" "internal" {
+  name                 = "internal"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = ["10.0.2.0/24"]
+}
+resource "azurerm_public_ip" "pip" {
+  name                = "${var.prefix}-pip"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  allocation_method   = "Static"
+}
+resource "azurerm_network_interface" "main" {
+  name                = "${var.prefix}-nic1"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  ip_configuration {
+    name                          = "primary"
+    subnet_id                     = azurerm_subnet.internal.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.pip.id
+  }
+}
+resource "azurerm_network_interface" "internal" {
+  name                = "${var.prefix}-nic2"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.internal.id
+    private_ip_address_allocation = "Dynamic"
+  }
+}
+resource "azurerm_network_security_group" "ssh" {
+  name                = "ssh"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  security_rule {
+    access                     = "Allow"
+    direction                  = "Inbound"
+    name                       = "ssh"
+    priority                   = 100
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    source_address_prefix      = "*"
+    destination_port_range     = "22"
+    destination_address_prefix = azurerm_network_interface.main.private_ip_address
+  }
+}
+resource "azurerm_network_interface_security_group_association" "main" {
+  network_interface_id      = azurerm_network_interface.main.id
+  network_security_group_id = azurerm_network_security_group.ssh.id
+}
+resource "azurerm_linux_virtual_machine" "main" {
+  name                            = "${var.prefix}-vm"
+  resource_group_name             = azurerm_resource_group.main.name
+  location                        = azurerm_resource_group.main.location
+  size                            = "Standard_F2"
+  admin_username                  = "simon"
+  network_interface_ids = [
+    azurerm_network_interface.main.id,
+    azurerm_network_interface.internal.id,
+  ]
+  admin_ssh_key {
+    username   = "simon"
+    public_key = file("<CHEMIN_PUB_KEY>")
+  }
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts"
+    version   = "latest"
+  }
+  os_disk {
+    storage_account_type = "Standard_LRS"
+    caching              = "ReadWrite"
+  }
+}
+resource "azurerm_network_interface" "internal2" {
+  name                = "${var.prefix}-nic3"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  ip_configuration {
+    name                          = "internal2"
+    subnet_id                     = azurerm_subnet.internal.id
+    private_ip_address_allocation = "Dynamic"
+  }
+}
+resource "azurerm_linux_virtual_machine" "main2" {
+  name                            = "${var.prefix}-vm2"
+  resource_group_name             = azurerm_resource_group.main.name
+  location                        = azurerm_resource_group.main.location
+  size                            = "Standard_F2"
+  admin_username                  = "simon"
+  network_interface_ids = [
+    azurerm_network_interface.internal2.id,
+  ]
+  admin_ssh_key {
+    username   = "simon"
+    public_key = file("<CHEMIN_PUB_KEY>")
+  }
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts"
+    version   = "latest"
+  }
+  os_disk {
+    storage_account_type = "Standard_LRS"
+    caching              = "ReadWrite"
+  }
+}
+```
+
+- ssh -J simon@108.143.55.123 simon@10.0.2.6
+
+On fait un ptit `ip a` depuis la VM2 histoire de s’assurer que c’est bien elle 
+    
+```
+    - ip a 
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
+    link/ether 7c:1e:52:5d:61:15 brd ff:ff:ff:ff:ff:ff
+    inet 10.0.2.6/24 metric 100 brd 10.0.2.255 scope global eth0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::7e1e:52ff:fe5d:6115/64 scope link 
+       valid_lft forever preferred_lft forever
+```
+
+IT'S WORK, WE DID IT !!!!
+
+**4. Cloud init**
+
+Dans cette partie il faut qu'on déploie un VM avec un fichier de conf cloud-init qui va permettre l'installation de docker directement au premier boot.
+
+cloud-init.txt : 
+```
+#cloud-config
+groups:
+  - docker
+
+
+users:
+  - default
+  - name: simon
+    passwd: $6$rounds=4096$dmXMlSNBtey5EJM6$vTwABn4SnkTQmasq45hJqDyDlSj7G47bOVEf.iTz964m1MUPkNZGW0ZXCAZkgoyO5kemB9bcGHdL04oiy4QAO1
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    groups: sudo, docker
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - RSA_PUB_KEY
+
+apt:
+  sources:
+    docker.list:
+      source: deb [arch=amd64] https://download.docker.com/linux/ubuntu $RELEASE stable
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+
+packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg-agent
+  - software-properties-common
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+
+runcmd:
+  - docker pull alpine:latest 
+```
+
+main.tf: 
+
+```
+provider "azurerm" {
+  features {}
+  subscription_id = "<SUBSCRIPTION_ID>"
+}
+resource "azurerm_resource_group" "main" {
+  name     = "${var.prefix}-resources"
+  location = var.location
+}
+resource "azurerm_virtual_network" "main" {
+  name                = "${var.prefix}-network"
+  address_space       = ["10.0.0.0/16"]
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+}
+resource "azurerm_subnet" "internal" {
+  name                 = "internal"
+  resource_group_name  = azurerm_resource_group.main.name
+  virtual_network_name = azurerm_virtual_network.main.name
+  address_prefixes     = ["10.0.2.0/24"]
+}
+resource "azurerm_public_ip" "pip" {
+  name                = "${var.prefix}-pip"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  allocation_method   = "Static"
+}
+resource "azurerm_network_interface" "main" {
+  name                = "${var.prefix}-nic1"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  ip_configuration {
+    name                          = "primary"
+    subnet_id                     = azurerm_subnet.internal.id
+    private_ip_address_allocation = "Dynamic"
+    public_ip_address_id          = azurerm_public_ip.pip.id
+  }
+}
+resource "azurerm_network_interface" "internal" {
+  name                = "${var.prefix}-nic2"
+  resource_group_name = azurerm_resource_group.main.name
+  location            = azurerm_resource_group.main.location
+  ip_configuration {
+    name                          = "internal"
+    subnet_id                     = azurerm_subnet.internal.id
+    private_ip_address_allocation = "Dynamic"
+  }
+}
+resource "azurerm_network_security_group" "ssh" {
+  name                = "ssh"
+  location            = azurerm_resource_group.main.location
+  resource_group_name = azurerm_resource_group.main.name
+  security_rule {
+    access                     = "Allow"
+    direction                  = "Inbound"
+    name                       = "ssh"
+    priority                   = 100
+    protocol                   = "Tcp"
+    source_port_range          = "*"
+    source_address_prefix      = "*"
+    destination_port_range     = "22"
+    destination_address_prefix = azurerm_network_interface.main.private_ip_address
+  }
+}
+resource "azurerm_network_interface_security_group_association" "main" {
+  network_interface_id      = azurerm_network_interface.main.id
+  network_security_group_id = azurerm_network_security_group.ssh.id
+}
+resource "azurerm_linux_virtual_machine" "main" {
+  name                            = "${var.prefix}-vm"
+  resource_group_name             = azurerm_resource_group.main.name
+  location                        = azurerm_resource_group.main.location
+  size                            = "Standard_F2"
+  admin_username                  = "simon"
+  network_interface_ids = [
+    azurerm_network_interface.main.id,
+    azurerm_network_interface.internal.id,
+  ]
+  admin_ssh_key {
+    username   = "simon"
+    public_key = file("<CHEMIN_PUB_KEY>")
+  }
+  source_image_reference {
+    publisher = "Canonical"
+    offer     = "0001-com-ubuntu-server-jammy"
+    sku       = "22_04-lts"
+    version   = "latest"
+  }
+  os_disk {
+    storage_account_type = "Standard_LRS"
+    caching              = "ReadWrite"
+  }
+  custom_data = base64encode(file("cloud-init.txt"))
+}
+```
+cloud-init status
+status: done
+
+docker -v
+Docker version 28.0.4, build b8034c0
